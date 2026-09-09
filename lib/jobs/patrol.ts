@@ -4,7 +4,7 @@
  * snapshots → threshold moves → news → events table.
  */
 
-import { getSnapshots } from "@/lib/agenthub/market";
+import { getSnapshots, type MarketSnapshot } from "@/lib/agenthub/market";
 import { callSignal } from "@/lib/agenthub/signal";
 import { read, update, uid, type OvernightEvent } from "@/lib/db";
 
@@ -159,10 +159,55 @@ export async function runPatrol(force = false): Promise<PatrolReport> {
     });
   }
 
+  await settleSimulatedOrders(snapshots);
+
   return {
     ranAt,
     sessionOpen: true,
     symbols: watchlist,
     eventsAdded: newEvents.length,
   };
+}
+
+/**
+ * Local simulated fills for signed orders whose venue is the desk simulator
+ * (demo- refs: paper env has no rToken listing, or no demo key configured).
+ * A submitted order fills when market price crosses its limit/trigger.
+ * Every simulated fill is audit-logged and clearly labeled.
+ */
+async function settleSimulatedOrders(snapshots: MarketSnapshot[]): Promise<void> {
+  const priceBySymbol = new Map(
+    snapshots.filter((s) => s.price !== null).map((s) => [s.symbol, s.price as number]),
+  );
+  if (priceBySymbol.size === 0) return;
+
+  const nowIso = new Date().toISOString();
+  await update((store) => {
+    for (const o of store.order_drafts) {
+      if (o.status !== "submitted") continue;
+      if (!o.agenthub_ref || !o.agenthub_ref.startsWith("demo-")) continue; // real paper orders settle on venue
+      const price = priceBySymbol.get(o.symbol);
+      if (price === undefined) continue;
+
+      const target = o.trigger_price ?? o.limit_price ?? null;
+      let filled = false;
+      if (o.order_type === "market") {
+        filled = true; // market order fills at patrol price
+      } else if (target !== null) {
+        filled = o.side === "buy" ? price <= target : price >= target;
+      }
+      if (!filled) continue;
+
+      o.status = "filled";
+      o.agenthub_ref = o.agenthub_ref + "@fill:" + price;
+      store.audit_log.push({
+        id: uid("a"),
+        ts: nowIso,
+        action: "submit",
+        entity_id: o.id,
+        actor: "desk-simulator",
+        detail: `simulated fill ${o.side} ${o.qty} ${o.symbol} @ ${price}（模拟盘无该标的或未配置 Demo Key，由桌台模拟成交）`,
+      });
+    }
+  });
 }

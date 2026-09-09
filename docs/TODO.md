@@ -27,7 +27,8 @@
 > 这是排期里最优先的事：PRD §9 的风险项在这里集中关闭，避免 P2/P3 写到一半被数据问题打回。
 
 - [x] **T0.1 开发环境确认**（Node 24 / npm 11 / git 2.52 ✓）
-- [ ] **T0.2 Bitget 账户 + Demo API Key 申请**（需用户操作：bitget.com/api-management 创建 Demo Key，填入 `.env` 的 `BITGET_DEMO_*`）
+- [x] **T0.2 Bitget 账户 + Demo API Key 申请** ✅ 2026-09-09
+  Key 已创建并验证（`account_overview` paper 环境返回 200，UID 已回显）。⚠️ 实测结论：**模拟盘环境未上线 rToken 交易对**（RTSLAUSDT 报"不存在"；BTCUSDT 报"余额不足"证明下单链路本身全通）。应对已实现：rToken 订单签字后转**桌台模拟执行**（patrol 用真实价格判定成交，审计留痕）；若模拟盘后续上线 rToken 或申请到虚拟资金，同一代码路径自动走真实 paper 下单。
 - [x] **T0.3 rToken 美股覆盖实测** ✅ 2026-09-09
   结论：**726 个 rToken 标的**，格式 `R+TICKER+USDT`（RTSLAUSDT/RNVDAUSDT/RSPYUSDT…），单标的行情验证通过；v3 ticker 字段为 lastPrice/openPrice24h（无 change24h，涨跌幅自算）。**无需 fallback**。清单见 [notes/rtoken-coverage.md](./notes/rtoken-coverage.md)。
 - [x] **T0.4 bitget-signal 五技能实测** ✅ 2026-09-09
@@ -62,7 +63,7 @@
 - [x] T3.1 draft-order.ts（LLM JSON 模式 + 无 Key 规则解析兜底；R 前缀代码转换）
 - [x] T3.2 riskCheck（仓位/偏离/冲突/阻断，冒烟验证：44% 仓位被标 bad、-40% 偏离被标 warn）
 - [x] T3.3 orders 三端点 + 状态机 + audit_log（sign 前置校验 ✓）
-- [x] T3.4 paper 下单对接（strategy_order 调用路径 ✓；无 Key 时 demo-sim 引用，有 Key 即真实模拟盘）
+- [x] T3.4 paper 下单对接 ✅ 9/9（`order` 动词 v3 契约适配：SPOT 市价买按 USDT 计价、限价/卖按股数；条件单不跨价映射为 GTC 限价、跨价止损型拒绝；rToken 在模拟盘缺席时转桌台模拟执行，巡检真实价格判定成交）
 - [x] T3.5 前端计划卡 + 签字弹窗 + 挂单列表 + 30s 轮询
 - [ ] T3.6 使用证明截图 #2（待 Demo Key + UI 截图）
 
