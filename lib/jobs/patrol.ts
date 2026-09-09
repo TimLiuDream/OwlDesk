@@ -12,23 +12,26 @@ export const MOVE_THRESHOLD_PCT = 1.5;
 
 /** True when US equity session is open (09:30–16:00 America/New_York, Mon–Fri). */
 export function isUsSessionOpen(now: Date = new Date()): boolean {
-  let et: string;
   try {
-    et = new Intl.DateTimeFormat("en-US", {
+    const parts = new Intl.DateTimeFormat("en-US", {
       timeZone: "America/New_York",
       hour: "2-digit",
       minute: "2-digit",
       weekday: "short",
       hour12: false,
-    }).format(now);
+      hourCycle: "h23",
+    }).formatToParts(now);
+    const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+    const weekday = get("weekday");
+    if (weekday === "Sat" || weekday === "Sun") return false;
+    const h = Number(get("hour"));
+    const m = Number(get("minute"));
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return true; // can't parse → don't block patrols
+    const minutes = h * 60 + m;
+    return minutes >= 9 * 60 + 30 && minutes < 16 * 60;
   } catch {
     return true; // TZ database missing → don't block patrols
   }
-  const weekday = et.split(",")[0].trim();
-  if (weekday === "Sat" || weekday === "Sun") return false;
-  const [h, m] = et.split(",")[1].trim().split(":").map(Number);
-  const minutes = h * 60 + m;
-  return minutes >= 9 * 60 + 30 && minutes < 16 * 60;
 }
 
 /** Current UTC offset of America/New_York as ±HH:MM (handles DST). */
