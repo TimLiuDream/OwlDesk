@@ -27,8 +27,8 @@
 > 这是排期里最优先的事：PRD §9 的风险项在这里集中关闭，避免 P2/P3 写到一半被数据问题打回。
 
 - [x] **T0.1 开发环境确认**（Node 24 / npm 11 / git 2.52 ✓）
-- [x] **T0.2 Bitget 账户 + Demo API Key 申请** ✅ 2026-09-09
-  Key 已创建并验证（`account_overview` paper 环境返回 200，UID 已回显）。⚠️ 实测结论：**模拟盘环境未上线 rToken 交易对**（RTSLAUSDT 报"不存在"；BTCUSDT 报"余额不足"证明下单链路本身全通）。应对已实现：rToken 订单签字后转**桌台模拟执行**（patrol 用真实价格判定成交，审计留痕）；若模拟盘后续上线 rToken 或申请到虚拟资金，同一代码路径自动走真实 paper 下单。
+- [x] **T0.2 Bitget 账户 + Demo API Key 申请** ✅ 2026-09-09（含资金到账与真实成交验证）
+  Key 已验证；模拟盘资金已领取（50,000 USDT）。**真实 paper 成交闭环已跑通**：应用内 LLM 拟单 → 签字 → `order` 动词真实提交（orderId 1481408774009147392，BTCUSDT 市价买 0.0002）→ 交易所订单历史确认 → USDT 49,984.24 / BTC 5.0001998 余额变动实证。⚠️ 模拟盘未上线 rToken 交易对（已实现桌台模拟执行兜底，见 T3.4）。
 - [x] **T0.3 rToken 美股覆盖实测** ✅ 2026-09-09
   结论：**726 个 rToken 标的**，格式 `R+TICKER+USDT`（RTSLAUSDT/RNVDAUSDT/RSPYUSDT…），单标的行情验证通过；v3 ticker 字段为 lastPrice/openPrice24h（无 change24h，涨跌幅自算）。**无需 fallback**。清单见 [notes/rtoken-coverage.md](./notes/rtoken-coverage.md)。
 - [x] **T0.4 bitget-signal 五技能实测** ✅ 2026-09-09
