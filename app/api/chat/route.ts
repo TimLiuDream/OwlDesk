@@ -31,6 +31,9 @@ export async function POST(req: NextRequest) {
         if (result.citations.length > 0) {
           send({ type: "citations", items: result.citations.slice(0, 8) });
         }
+        for (const action of result.actions) {
+          send({ type: "action", action });
+        }
         await persistChatTurn(sessionId, message, result.text, result.citations);
         send({ type: "done" });
       } catch (e) {

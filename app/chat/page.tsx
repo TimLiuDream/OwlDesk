@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
 interface Msg {
@@ -8,6 +9,7 @@ interface Msg {
   text: string;
   citations?: string[];
   tools?: string[];
+  draft?: { draftId: string; label: string };
 }
 
 const CHIPS = [
@@ -85,6 +87,7 @@ function ChatInner() {
             name?: string;
             ok?: boolean;
             message?: string;
+            action?: { kind: string; draftId: string; symbol: string; side: string; orderType: string; qty: number };
           };
           if (ev.type === "tool") {
             setMessages((m) => {
@@ -102,6 +105,15 @@ function ChatInner() {
             setMessages((m) => {
               const last = m[m.length - 1];
               last.citations = ev.items;
+              return [...m];
+            });
+          } else if (ev.type === "action" && ev.action?.kind === "draft_order") {
+            setMessages((m) => {
+              const last = m[m.length - 1];
+              last.draft = {
+                draftId: ev.action!.draftId,
+                label: `${ev.action!.symbol} ${ev.action!.side === "buy" ? "买入" : "卖出"} ${ev.action!.qty}（${ev.action!.orderType}）`,
+              };
               return [...m];
             });
           } else if (ev.type === "error" && ev.message) {
@@ -167,6 +179,15 @@ function ChatInner() {
                 {m.citations && m.citations.length > 0 && (
                   <div className="mt-2.5 border-t border-dashed border-line pt-2 text-[11px] text-slate-500">
                     📎 {m.citations.slice(0, 4).map((c) => (c.startsWith("http") ? c.replace(/^https?:\/\//, "").slice(0, 40) : c)).join(" · ")}
+                  </div>
+                )}
+                {m.draft && (
+                  <div className="mt-3 rounded-xl border border-owl-amber/30 bg-owl-amber/10 px-3.5 py-2.5 text-[13px]">
+                    📝 已起草订单计划：<b>{m.draft.label}</b>
+                    <Link href="/orders" className="ml-2 text-owl-amber underline underline-offset-2">
+                      去拟单台审阅并签字 →
+                    </Link>
+                    <div className="mt-0.5 text-[11px] text-slate-400">草稿不会执行任何操作，签字权在你</div>
                   </div>
                 )}
               </div>

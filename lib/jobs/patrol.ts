@@ -31,6 +31,21 @@ export function isUsSessionOpen(now: Date = new Date()): boolean {
   return minutes >= 9 * 60 + 30 && minutes < 16 * 60;
 }
 
+/** Current UTC offset of America/New_York as ±HH:MM (handles DST). */
+function etOffset(): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      timeZoneName: "longOffset",
+    }).formatToParts(new Date());
+    const tz = parts.find((p) => p.type === "timeZoneName")?.value ?? "GMT-04:00";
+    const m = tz.match(/GMT([+-]\d{2}:\d{2})/);
+    return m ? m[1] : "-04:00";
+  } catch {
+    return "-04:00";
+  }
+}
+
 function etTimestamp(now: Date = new Date()): string {
   try {
     return new Intl.DateTimeFormat("en-CA", {
@@ -42,7 +57,7 @@ function etTimestamp(now: Date = new Date()): string {
       minute: "2-digit",
       second: "2-digit",
       hour12: false,
-    }).format(now).replace(", ", "T") + "-04:00";
+    }).format(now).replace(", ", "T") + etOffset();
   } catch {
     return now.toISOString();
   }
@@ -87,18 +102,21 @@ export async function runPatrol(force = false): Promise<PatrolReport> {
   const tsEt = etTimestamp();
 
   // --- price moves since previous snapshot of the same session ---
+  const todayEt = etDate();
   const lastBySymbol = await read((store) => {
     const map = new Map<string, OvernightEvent>();
     for (const ev of store.overnight_events) {
-      if (ev.type === "price_move" && ev.price != null) {
-        const prev = map.get(ev.symbol);
-        if (!prev || prev.ts_et < ev.ts_et) map.set(ev.symbol, ev);
-      }
+      if (ev.type !== "price_move" || ev.price == null) continue;
+      if (ev.ts_et.slice(0, 10) !== todayEt) continue; // same ET session only
+      const prev = map.get(ev.symbol);
+      if (!prev || prev.ts_et < ev.ts_et) map.set(ev.symbol, ev);
     }
     return map;
   });
 
   for (const snap of snapshots) {
+    // 数据诚实性铁律：演示/降级价格绝不产生"真实异动"事件
+    if (snap.source !== "agenthub") continue;
     if (snap.price === null || snap.changePct === null) continue;
 
     const last = lastBySymbol.get(snap.symbol);
@@ -177,7 +195,9 @@ export async function runPatrol(force = false): Promise<PatrolReport> {
  */
 async function settleSimulatedOrders(snapshots: MarketSnapshot[]): Promise<void> {
   const priceBySymbol = new Map(
-    snapshots.filter((s) => s.price !== null).map((s) => [s.symbol, s.price as number]),
+    snapshots
+      .filter((s) => s.price !== null && s.source === "agenthub") // 模拟成交也必须由真实市价判定
+      .map((s) => [s.symbol, s.price as number]),
   );
   if (priceBySymbol.size === 0) return;
 

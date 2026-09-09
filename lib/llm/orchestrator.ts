@@ -7,15 +7,17 @@
 import { chatCompletion, type ChatMessageParam, type ToolSchema, LlmUnavailableError } from "./provider";
 import { CHAT_SYSTEM_PROMPT } from "./prompts";
 import { chatTools, type ToolDef } from "@/lib/agenthub/tools";
+import { appTools, type DraftOrderAction } from "./app-tools";
 import { read, uid, type ChatMessage } from "@/lib/db";
 
 export interface OrchestratorEvent {
-  type: "tool" | "delta" | "citations" | "error" | "done";
+  type: "tool" | "delta" | "citations" | "action" | "error" | "done";
   name?: string;
   ok?: boolean;
   ms?: number;
   text?: string;
   items?: string[];
+  action?: DraftOrderAction;
   message?: string;
 }
 
@@ -23,6 +25,7 @@ export interface OrchestratorResult {
   text: string;
   citations: string[];
   toolEvents: Array<{ name: string; ok: boolean; ms: number }>;
+  actions: DraftOrderAction[];
 }
 
 const MAX_ROUNDS = 6;
@@ -57,11 +60,12 @@ export async function runOrchestrator(
     { role: "user", content: userMessage },
   ];
 
-  const tools = chatTools();
+  const tools = [...chatTools(), ...appTools((a) => actions.push(a))];
   const schemas = tools.map(toSchema);
   const byName = new Map(tools.map((t) => [t.name, t]));
   const citations = new Set<string>();
   const toolEvents: Array<{ name: string; ok: boolean; ms: number }> = [];
+  const actions: DraftOrderAction[] = [];
 
   try {
     for (let round = 0; round < MAX_ROUNDS; round++) {
@@ -73,7 +77,7 @@ export async function runOrchestrator(
       if (toolCalls.length === 0) {
         const text = choice.message.content ?? "";
         emit({ type: "delta", text });
-        return { text, citations: [...citations], toolEvents };
+        return { text, citations: [...citations], toolEvents, actions };
       }
 
       messages.push({ role: "assistant", content: null, tool_calls: toolCalls });
@@ -126,7 +130,7 @@ export async function runOrchestrator(
     const res = await chatCompletion(messages, {});
     const text = res.choices?.[0]?.message?.content ?? "";
     emit({ type: "delta", text });
-    return { text, citations: [...citations], toolEvents };
+    return { text, citations: [...citations], toolEvents, actions };
   } catch (e) {
     if (e instanceof LlmUnavailableError) {
       const message = e.message;
@@ -135,6 +139,7 @@ export async function runOrchestrator(
         text: "（LLM 未配置或不可用：已降级。请设置 LLM_API_KEY 后重试；行情与信号工具本身仍可用。）",
         citations: [],
         toolEvents,
+        actions,
       };
     }
     throw e;

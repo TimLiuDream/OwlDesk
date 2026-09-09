@@ -53,6 +53,10 @@ function model(): string {
   return process.env.LLM_MODEL || "qwen-plus";
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 export class LlmUnavailableError extends Error {}
 
 export async function chatCompletion(
@@ -82,20 +86,45 @@ export async function chatCompletion(
     body.response_format = { type: "json_object" };
   }
 
-  const res = await safeFetch(baseUrl() + "/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: "Bearer " + key,
-    },
-    body: JSON.stringify(body),
-  }, 45_000);
+  // The upstream proxy occasionally trips its breaker (observed live:
+  // "provider temporarily unhealthy") — one retry on 5xx/429/network errors.
+  const MAX_ATTEMPTS = 2;
+  let lastError: LlmUnavailableError = new LlmUnavailableError("LLM request failed");
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    let res: Response;
+    try {
+      res = await safeFetch(baseUrl() + "/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + key,
+        },
+        body: JSON.stringify(body),
+      }, 45_000);
+    } catch (e) {
+      // network/timeout — retryable
+      lastError = new LlmUnavailableError("LLM network error: " + (e instanceof Error ? e.message : "unknown"));
+      if (attempt < MAX_ATTEMPTS) {
+        await sleep(800);
+        continue;
+      }
+      throw lastError;
+    }
 
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new LlmUnavailableError(`LLM HTTP ${res.status}: ${detail.slice(0, 300)}`);
+    if (res.ok) {
+      return (await res.json()) as LlmResponse;
+    }
+
+    const detail = (await res.text().catch(() => "")).slice(0, 300);
+    const retryable = res.status >= 500 || res.status === 429;
+    lastError = new LlmUnavailableError(`LLM HTTP ${res.status}: ${detail}`);
+    if (retryable && attempt < MAX_ATTEMPTS) {
+      await sleep(800);
+      continue;
+    }
+    throw lastError;
   }
-  return (await res.json()) as LlmResponse;
+  throw lastError;
 }
 
 export function llmConfigured(): boolean {

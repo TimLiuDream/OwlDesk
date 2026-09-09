@@ -16,6 +16,8 @@ export interface RiskInput {
   positions: Array<{ symbol: string; qty: number; markPrice: number; side?: string }>;
   equityUsdt: number;
   currentPrice: number | null;
+  /** false when the live quote failed and we only have demo-price data */
+  marketDataLive?: boolean;
 }
 
 export type RiskOutput = OrderDraft["risk_json"];
@@ -47,8 +49,16 @@ export function riskCheck(input: RiskInput): RiskOutput {
 
   let blocked = false;
 
+  // 数量未识别/非法是硬阻断：签字前拦下，而不是让交易所在签字后报 400
   if (input.qty === null || input.qty <= 0) {
-    warnings.push({ text: "数量未识别，签字前需人工确认", level: "warn" });
+    warnings.push({ text: "数量未识别或非法，必须在签字前补全", level: "bad" });
+    blocked = true;
+  }
+  if (input.marketDataLive === false) {
+    warnings.push({
+      text: "实时行情不可用（当前为演示数据），仓位/偏离指标为估算值",
+      level: "warn",
+    });
   }
   if (positionPct > MAX_POSITION_PCT_BLOCK) {
     warnings.push({ text: `目标仓位占比 ${positionPct}%，超出 ${MAX_POSITION_PCT_BLOCK}% 硬限制`, level: "bad" });
@@ -64,11 +74,19 @@ export function riskCheck(input: RiskInput): RiskOutput {
   }
   if (conflictWithPositions) {
     warnings.push({ text: "与现有持仓方向冲突", level: "warn" });
+  } else if (existing && input.side === "buy" && (existing.side ?? "long") === "long" && input.equityUsdt > 0) {
+    const existingPct = Math.round(((existing.qty * existing.markPrice) / input.equityUsdt) * 100);
+    warnings.push({
+      text: `与现有持仓同向叠加：该标的已占 ${existingPct}%，本单后合计 ${positionPct}%`,
+      level: "warn",
+    });
+  } else if (existing && input.side === "sell" && (existing.side ?? "long") === "long") {
+    warnings.push({ text: "对本标的做减仓/离场方向", level: "info" });
   }
   if (input.order_type === "market" && input.currentPrice === null) {
     warnings.push({ text: "市价单但当前行情不可用，成交价未知", level: "warn" });
   }
-  if (input.symbol.endsWith("USDT") === false) {
+  if (!input.symbol.endsWith("USDT")) {
     warnings.push({ text: "标的代码格式存疑（非 USDT 计价对）", level: "warn" });
   }
   if (warnings.length === 0) {

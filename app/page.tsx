@@ -1,18 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { Brief, OvernightEvent } from "@/lib/db";
+import { useCallback, useEffect, useState } from "react";
+import type { Brief, OvernightEvent, WatchlistItem } from "@/lib/db";
 import BriefCard from "@/components/BriefCard";
 
 interface BriefResponse {
   brief: Brief;
   events: OvernightEvent[];
+  stale?: boolean;
 }
 
 export default function BriefPage() {
   const [data, setData] = useState<BriefResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [newSymbol, setNewSymbol] = useState("");
 
   const load = () => {
     fetch("/api/brief?events=1")
@@ -22,7 +25,34 @@ export default function BriefPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, []);
+  const loadWatchlist = useCallback(() => {
+    fetch("/api/watchlist")
+      .then((r) => r.json())
+      .then((d: { watchlist: WatchlistItem[] }) => setWatchlist(d.watchlist ?? []))
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    load();
+    loadWatchlist();
+  }, [loadWatchlist]);
+
+  const addSymbol = async () => {
+    const symbol = newSymbol.trim().toUpperCase();
+    if (!symbol) return;
+    setNewSymbol("");
+    await fetch("/api/watchlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol }),
+    }).catch(() => undefined);
+    loadWatchlist();
+  };
+
+  const removeSymbol = async (symbol: string) => {
+    await fetch(`/api/watchlist?symbol=${symbol}`, { method: "DELETE" }).catch(() => undefined);
+    loadWatchlist();
+  };
 
   const regenerate = async () => {
     setRegenerating(true);
@@ -65,6 +95,7 @@ export default function BriefPage() {
             <span className="pill ml-3 align-middle">
               ET {brief.date} 收盘 · {new Date(brief.generated_at).toLocaleString("zh-CN")}
             </span>
+            {data.stale && <span className="pill pill-warn ml-2 align-middle">最近一份（新时段未开盘）</span>}
             {brief.status === "partial" && <span className="pill pill-warn ml-2 align-middle">模板降级</span>}
           </h1>
           <p className="mt-1 text-sm text-slate-500">{brief.summary_json.headline}</p>
@@ -77,6 +108,35 @@ export default function BriefPage() {
             {regenerating ? "生成中…" : "⟳ 重新生成晨报"}
           </button>
         </div>
+      </div>
+
+      {/* Watchlist 管理（PRD A1） */}
+      <div className="card mb-5 flex flex-wrap items-center gap-2 px-5 py-3.5">
+        <span className="text-xs tracking-widest text-slate-500">巡检自选</span>
+        {watchlist.map((w) => (
+          <span key={w.id} className="pill">
+            {w.symbol}
+            <button
+              className="ml-1 text-slate-500 transition-colors hover:text-owl-red"
+              title="从自选移除"
+              onClick={() => removeSymbol(w.symbol)}
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        <span className="ml-auto flex items-center gap-2">
+          <input
+            className="input !w-40 !px-3 !py-1.5 text-sm"
+            placeholder="加标的，如 RGOOGLUSDT"
+            value={newSymbol}
+            onChange={(e) => setNewSymbol(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addSymbol()}
+          />
+          <button className="btn !px-3 !py-1.5" onClick={addSymbol}>
+            添加
+          </button>
+        </span>
       </div>
 
       <div className="space-y-4">

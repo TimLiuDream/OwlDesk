@@ -32,6 +32,8 @@ function isPrivateOrReservedV4(host: string): boolean {
   if (o[0] === 0 || o[0] === 10 || o[0] === 127) return true; // 0/8, 10/8, loopback
   if (o[0] === 172 && o[1] >= 16 && o[1] <= 31) return true; // 172.16/12
   if (o[0] === 192 && o[1] === 168) return true; // 192.168/16
+  if (o[0] === 169 && o[1] === 254) return true; // link-local incl. cloud metadata
+  if (o[0] === 100 && o[1] >= 64 && o[1] <= 127) return true; // CGNAT 100.64/10
   if (o[0] >= 224) return true; // multicast + reserved
   return false;
 }

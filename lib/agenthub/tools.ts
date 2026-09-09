@@ -8,8 +8,8 @@
  */
 
 import { getSnapshots } from "./market";
-import { getReadonlyHub } from "./client";
 import { callSignal, type SignalSkill } from "./signal";
+import { getAccountContext } from "@/lib/account";
 
 export interface ToolDef {
   name: string;
@@ -23,19 +23,11 @@ export interface ToolDef {
 }
 
 async function getPositionsDemoSafe(): Promise<unknown> {
-  const hub = await getReadonlyHub();
-  if (hub.ok) {
-    const res = await hub.invoke("account_overview", { action: "balances" });
-    if (res && res.ok) return res.data;
-  }
-  // demo positions (DEMO_MODE / no key)
+  const ctx = await getAccountContext();
   return {
-    list: [
-      { symbol: "RTSLAUSDT", qty: "25", side: "long", entryPrice: "212.4", markPrice: "224.8" },
-      { symbol: "RNVDAUSDT", qty: "10", side: "long", entryPrice: "166.1", markPrice: "172.4" },
-      { symbol: "RSPYUSDT", qty: "5", side: "long", entryPrice: "5428", markPrice: "5480" },
-    ],
-    demo: true,
+    list: ctx.positions.map((p) => ({ symbol: p.symbol, qty: String(p.qty), side: p.side ?? "long", markPrice: String(p.markPrice) })),
+    equityUsdt: ctx.equityUsdt,
+    demo: ctx.demo,
   };
 }
 

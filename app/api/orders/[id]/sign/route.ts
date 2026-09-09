@@ -36,12 +36,18 @@ function buildPlaceArgs(
     tif: string;
   },
   currentPrice: number | null,
+  marketDataLive: boolean,
 ): { args: Record<string, unknown>; note: string } | { error: string } {
   const base = { category: "SPOT", symbol: order.symbol, side: order.side };
+
+  if (order.qty <= 0) {
+    return { error: "数量缺失或非法，拒绝提交（请在草稿中补全数量）" };
+  }
 
   if (order.order_type === "market") {
     if (order.side === "buy") {
       if (!currentPrice) return { error: "市价买单需要当前行情换算 USDT 金额，行情不可用" };
+      if (!marketDataLive) return { error: "实时行情不可用（仅演示数据），市价买入金额无法可靠换算，拒绝提交" };
       const notional = Math.round(order.qty * currentPrice * 100) / 100;
       return {
         args: { ...base, action: "place", orderType: "market", qty: String(notional) },
@@ -57,10 +63,9 @@ function buildPlaceArgs(
   const price = order.order_type === "limit" ? order.limit_price : order.trigger_price;
   if (!price) return { error: "订单缺少限价/触发价" };
 
-  if (order.order_type === "conditional") {
+  if (order.order_type === "conditional" && marketDataLive && currentPrice !== null) {
     const crossing =
-      currentPrice !== null &&
-      ((order.side === "sell" && price < currentPrice) || (order.side === "buy" && price > currentPrice));
+      (order.side === "sell" && price < currentPrice) || (order.side === "buy" && price > currentPrice);
     if (crossing) {
       return {
         error: `条件单方向会跨越市价（${order.side === "sell" ? "卖出价低于" : "买入价高于"}现价 ${currentPrice}），映射为限价单会立即成交。现货条件单需本地监控执行，本版已拒绝提交`,
@@ -115,7 +120,8 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
 
   if (hub.ok) {
     const [snap] = await getSnapshots([order.symbol]);
-    const built = buildPlaceArgs(order, snap?.price ?? null);
+    // 市价买需要用实时价换算计价币金额——演示/降级价格不可用于换算
+    const built = buildPlaceArgs(order, snap?.price ?? null, snap?.source === "agenthub");
     if ("error" in built) {
       await update((store) => {
         store.audit_log.push({

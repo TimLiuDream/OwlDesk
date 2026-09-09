@@ -58,25 +58,40 @@ function asTrigger(v: unknown): "price>=" | "price<=" | null {
   return v === "price>=" || v === "price<=" ? v : null;
 }
 
+/** Common non-rToken bases so the heuristic doesn't R-prefix real crypto pairs. */
+const KNOWN_CRYPTO = new Set([
+  "BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "BGB", "ADA", "AVAX", "LINK",
+  "TON", "TRX", "DOT", "MATIC", "LTC", "UNI", "ATOM", "NEAR", "APT", "ARB", "OP", "PEPE",
+]);
+
 /** Rule-based fallback so drafting still works without an LLM key. */
 function heuristicParse(text: string): ParsedOrderPlan | null {
   const t = text.toLowerCase();
   const sell = /(卖出|做空|止损|清仓|sell|short)/.test(t);
-  const conditional = /(跌破|跌破|高于|低于|回踩|触发|突破|below|above|hits?)/.test(t);
+  const breakout = /(突破|涨到|高于|升破|above|breaks?)/.test(t);
+  const conditional = /(跌破|回踩|回调|跌到|低于|触发|条件|突破|涨到|高于|升破|below|above|hits?)/.test(t);
   const limit = /(限价|挂单|limit)/.test(t);
 
-  const symMatch = text.toUpperCase().match(/\b(R?[A-Z]{1,6})(USDT)?\b/);
+  // Symbol: first ALL-CAPS token, strip a trailing USDT, then qualify.
+  // "TSLA" → RTSLAUSDT (rToken); "BTC"/"BTCUSDT"/"RNVDAUSDT" stay intact.
+  const symMatch = text.toUpperCase().match(/\b([A-Z]{2,10})\b/);
   let symbol: string | null = null;
   if (symMatch) {
-    const rawSym = symMatch[1];
-    // rToken format is R+TICKER+USDT (e.g. RTSLAUSDT); bare TSLA → RTSLAUSDT
-    symbol = rawSym.startsWith("R") ? rawSym + "USDT" : "R" + rawSym + "USDT";
+    const base = symMatch[1].replace(/USDT$/, "");
+    if (base) {
+      symbol = KNOWN_CRYPTO.has(base) || base.startsWith("R")
+        ? base + "USDT"
+        : "R" + base + "USDT";
+    }
   }
 
   const priceMatch = t.match(/(\d{2,6}(?:\.\d+)?)/);
   const price = priceMatch ? Number(priceMatch[1]) : null;
 
-  const qtyMatch = t.match(/(\d{1,6})\s*(?:股|份|个|张|shares?)/) ?? t.match(/买(?:入)?\s*(\d{1,6})/);
+  const qtyMatch =
+    t.match(/(\d+(?:\.\d+)?)\s*(?:股|份|个|张|btc|eth|bitcoin|shares?)/) ??
+    t.match(/买(?:入|进)?\s*(\d+(?:\.\d+)?)/) ??
+    t.match(/sell\s+(\d+(?:\.\d+)?)/i);
 
   return {
     symbol,
@@ -84,7 +99,7 @@ function heuristicParse(text: string): ParsedOrderPlan | null {
     order_type: conditional ? "conditional" : limit ? "limit" : "market",
     qty: qtyMatch ? Number(qtyMatch[1]) : null,
     limit_price: !conditional && price !== null ? price : null,
-    trigger_cond: conditional ? (sell ? "price<=" : "price<=") : null,
+    trigger_cond: conditional ? (breakout && !sell ? "price>=" : "price<=") : null,
     trigger_price: conditional ? price : null,
     tif: "GTC",
     rationale: text.slice(0, 120),

@@ -3,36 +3,9 @@ import { read, update, uid, type OrderDraft } from "@/lib/db";
 import { parseOrderPlan } from "@/lib/llm/draft-order";
 import { riskCheck } from "@/lib/risk/check";
 import { getSnapshots } from "@/lib/agenthub/market";
-import { getReadonlyHub } from "@/lib/agenthub/client";
+import { getAccountContext } from "@/lib/account";
 
 export const dynamic = "force-dynamic";
-
-async function demoPositions(): Promise<Array<{ symbol: string; qty: number; markPrice: number; side?: string }>> {
-  const hub = await getReadonlyHub();
-  if (hub.ok) {
-    const res = await hub.invoke("account_overview", { action: "balances" });
-    if (res && res.ok) {
-      // shape varies; best-effort normalize
-      const data = res.data as { list?: Array<Record<string, string>> } | undefined;
-      const list = data?.list ?? [];
-      return list
-        .map((r) => ({
-          symbol: String(r.symbol ?? "").toUpperCase(),
-          qty: Number(r.available ?? r.qty ?? 0),
-          markPrice: Number(r.markPrice ?? r.u ?? 0),
-          side: "long",
-        }))
-        .filter((p) => p.qty > 0);
-    }
-  }
-  return [
-    { symbol: "RTSLAUSDT", qty: 25, markPrice: 224.8, side: "long" },
-    { symbol: "RNVDAUSDT", qty: 10, markPrice: 172.4, side: "long" },
-    { symbol: "RSPYUSDT", qty: 5, markPrice: 5480, side: "long" },
-  ];
-}
-
-const DEMO_EQUITY_USDT = 25_000;
 
 export async function GET(req: NextRequest) {
   const status = req.nextUrl.searchParams.get("status");
@@ -61,7 +34,7 @@ export async function POST(req: NextRequest) {
   }
 
   const [snap] = await getSnapshots([plan.symbol]);
-  const positions = await demoPositions();
+  const account = await getAccountContext();
   const risk = riskCheck({
     side: plan.side,
     symbol: plan.symbol,
@@ -69,9 +42,10 @@ export async function POST(req: NextRequest) {
     order_type: plan.order_type,
     limit_price: plan.limit_price,
     trigger_price: plan.trigger_price,
-    positions,
-    equityUsdt: DEMO_EQUITY_USDT,
+    positions: account.positions,
+    equityUsdt: account.equityUsdt,
     currentPrice: snap?.price ?? null,
+    marketDataLive: snap?.source === "agenthub",
   });
 
   const draft: OrderDraft = {

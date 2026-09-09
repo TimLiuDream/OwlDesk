@@ -39,9 +39,6 @@ export default function OrderPlanCard({
 }) {
   const [signing, setSigning] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [removed, setRemoved] = useState(false);
-
-  if (removed) return null;
 
   const priceLabel =
     order.order_type === "market"
@@ -70,6 +67,17 @@ export default function OrderPlanCard({
     setBusy(true);
     try {
       const res = await fetch(`/api/orders/${order.id}/cancel`, { method: "POST" });
+      const data = (await res.json()) as { order?: OrderDraft };
+      if (res.ok && data.order) onCanceled(data.order);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const discard = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/orders/${order.id}/discard`, { method: "POST" });
       const data = (await res.json()) as { order?: OrderDraft };
       if (res.ok && data.order) onCanceled(data.order);
     } finally {
@@ -119,14 +127,7 @@ export default function OrderPlanCard({
         <span className="mr-auto max-w-[45%] truncate text-xs italic text-slate-500">“{order.raw_text}”</span>
         {order.status === "draft" && (
           <>
-            <button
-              className="btn"
-              disabled={busy}
-              onClick={() => {
-                fetch(`/api/orders/${order.id}/cancel`, { method: "POST" }).catch(() => undefined);
-                setRemoved(true);
-              }}
-            >
+            <button className="btn" disabled={busy} onClick={discard}>
               丢弃草稿
             </button>
             <button

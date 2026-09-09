@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { OrderDraft } from "@/lib/db";
 import OrderPlanCard from "@/components/OrderPlanCard";
@@ -53,9 +53,14 @@ function OrdersInner() {
     }
   };
 
+  const consumedRef = useRef(false);
   useEffect(() => {
     const q = searchParams.get("q");
-    if (q) setInput(q);
+    // C6: "就此拟单" from the brief jumps straight into a generated plan card
+    if (q && !consumedRef.current) {
+      consumedRef.current = true;
+      draft(q);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
