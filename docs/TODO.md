@@ -32,7 +32,8 @@
   结论：**726 个 rToken 标的**，格式 `R+TICKER+USDT`（RTSLAUSDT/RNVDAUSDT/RSPYUSDT…），单标的行情验证通过；v3 ticker 字段为 lastPrice/openPrice24h（无 change24h，涨跌幅自算）。**无需 fallback**。清单见 [notes/rtoken-coverage.md](./notes/rtoken-coverage.md)。
 - [x] **T0.4 bitget-signal 五技能实测** ✅ 2026-09-09
   MCP 端点 `https://datahub.noxiaohao.com/mcp`（market-data-mcp v1.26.0，19 个工具，全部要 `action` 参数）。映射已落进 `lib/agenthub/signal.ts`：sentiment_index/news_feed/technical_analysis/macro_indicators/derivatives_sentiment。⚠️ 当前网络下 RSS 新闻源与 alternate.me 情绪源返回空（上游问题），已做内容校验 + demo 回落；部署到 Vercel 后需复测。
-- [ ] **T0.5 LLM 额度落实** ⏰ 9/15 前完成（需用户填 Qwen 申请表 + 本地 `.env` 配 `LLM_API_KEY`）。代码已支持任何 OpenAI 兼容端点。
+- [x] **T0.5 LLM 额度落实** ✅ 2026-09-09
+  已接入 OpenAI 兼容代理（cavoti.com，模型 gpt-5.6-terra），三项能力实测通过：基础 chat ✓ / function calling ✓ / JSON mode ✓。`.env` 已配好（不入库）。Qwen 30U（申请已交，等 Key）到位后改 `LLM_BASE_URL/LLM_MODEL` 两行即可切换。注意：代理偶发 `provider_temporarily_unhealthy` 熔断，重试即恢复；正式提交素材生成前留重试余量。
 - [x] **T0.6 使用证明截图 #1**（可用素材已具备：巡检日志 + events JSON；正式截图待 UI 跑起来后补 `docs/proof/`）
 
 ## P1 · 脚手架 + Agent Hub 接入层（✅ 9/9 提前完成）
@@ -73,10 +74,13 @@
 - [x] T4.4 跨模块入口（晨报卡"追问解读"→ chat?q=；"就此拟单"→ orders?q=）
 - [ ] T4.5 全链路整夜试跑（带 LLM Key + Chat；建议 9/17–9/18）
 
-## P4 后半 · Chat 实测项
+## P4 后半 · Chat 实测项（✅ 2026-09-09 完成，提前 8 天）
 
 - [x] T4.1–T4.4（见上，9/9 完成）
-- [ ] T4.5 全链路整夜试跑（带 LLM Key + Chat；建议 9/17–9/18）
+- [x] **T4.2/T4.3 LLM 实测** ✅ 9/9：Chat 工具循环真跑通——"RTSLAUSDT 现在多少钱"触发 4 工具链（行情→技术→新闻→情绪，含真实 RSI 57.29/恐惧贪婪 54），回答带引用与签字引导；SSE 五类事件正常
+- [x] **晨报 AI 归因实测** ✅ 9/9：headline 真 AI 总结；why 段在事件不足时诚实标注"无法确认"（反幻觉 prompt 生效）
+- [x] **LLM 拟单实测** ✅ 9/9："英伟达回踩 210 买 20 股" → RNVDAUSDT/buy/conditional/≤210/20股 + 风控（17% 仓位、-7.09% 偏离）
+- [ ] T4.5 全链路**整夜**试跑（单次会话已通；建议 9/17–9/18 挂一夜验证晨报节奏）
 
 ## P5 · 部署与演示材料（9/19）
 
