@@ -273,10 +273,17 @@ export async function callSignal(
 function shapeResult(text: string, sources: string[], skill: SignalSkill): SignalResult {
   const trimmed = text.trim();
 
-  // news_feed returns [{feed, error, items:[{title, link...}]}]
-  const newsMatch = shapeNewsFeed(trimmed);
-  if (newsMatch) {
-    return { ...newsMatch, sources: dedupe([...newsMatch.sources, ...sources]), asOf: new Date().toISOString(), skill, source: "mcp" };
+  // news_feed returns [{feed, error, items:[{title, link...}]}]. Once we
+  // recognize this shape, it OWNS the outcome: real headlines → result,
+  // all-empty items (upstream RSS failure) → NoRealContent → demo fallback.
+  // Never let this payload fall through to generic JSON flattening — that
+  // turns failure metadata ("feed: cointelegraph") into fake news events.
+  if (looksLikeNewsFeed(trimmed)) {
+    const shaped = shapeNewsFeed(trimmed);
+    if (shaped) {
+      return { ...shaped, sources: dedupe([...shaped.sources, ...sources]), asOf: new Date().toISOString(), skill, source: "mcp" };
+    }
+    throw new NoRealContent();
   }
 
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
@@ -301,7 +308,7 @@ function shapeResult(text: string, sources: string[], skill: SignalSkill): Signa
       };
       walk(parsed, 0);
       // drop error-keyed noise; if nothing real remains, treat as no data
-      const real = flat.filter((f) => !/^(alt_me_error|error)[:\s]/i.test(f) && f.split(": ").pop() !== "");
+      const real = flat.filter((f) => !/^(alt_me_error|error|feed)[:\s]/i.test(f) && f.split(": ").pop() !== "");
       if (real.length > 0) {
         return {
           headline: real[0],
@@ -334,6 +341,19 @@ class NoRealContent extends Error {}
 
 function dedupe(arr: string[]): string[] {
   return [...new Set(arr)];
+}
+
+/** Detect the news_feed payload shape: an array whose entries carry feed/items keys. */
+function looksLikeNewsFeed(trimmed: string): boolean {
+  if (!trimmed.startsWith("[")) return false;
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    if (!Array.isArray(parsed) || parsed.length === 0) return false;
+    const entries = parsed as Array<Record<string, unknown>>;
+    return entries.some((e) => "feed" in e && "items" in e);
+  } catch {
+    return false;
+  }
 }
 
 /** Parse news_feed-shaped payloads; returns null if not that shape or no items. */
