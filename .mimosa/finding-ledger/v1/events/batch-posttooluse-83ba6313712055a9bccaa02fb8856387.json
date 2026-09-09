@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "posttooluse-83ba6313712055a9bccaa02fb8856387",
+  "runId": null,
+  "runStatus": "completed",
+  "coverage": {
+    "status": "complete",
+    "reasons": []
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "PostToolUse"
+  },
+  "revision": null,
+  "diffHash": null,
+  "rulesVersion": null,
+  "sessionHash": "77f538d9a4e91abe02b6b4b1f2bd9897501603e07e7353a4b822197776d7ac08",
+  "reportRef": null,
+  "events": [
+    {
+      "eventId": "hook-7309410c39422e2a72864fa1d07666fe",
+      "findingId": "mimosa-0dbb08079c7bdc190a74bce3",
+      "type": "static_fix_verified",
+      "at": "2026-09-08T16:37:26.463Z",
+      "identity": {
+        "projectRelativeFile": "lib/agenthub/signal.ts",
+        "ruleId": "security",
+        "codeEvidenceHash": "604d07b2ba84cc933fd80a8df7a26deb7bd517bf1e2b3b7d5199284805cbc7bc",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 160,
+      "endLine": 160,
+      "reasonCode": "static_rescan_passed",
+      "reportedToAgent": false,
+      "evidence": {
+        "kind": "static_scan",
+        "boundary": "observed",
+        "producer": "deterministic",
+        "evidenceHash": "604d07b2ba84cc933fd80a8df7a26deb7bd517bf1e2b3b7d5199284805cbc7bc"
+      },
+      "sequence": 0
+    }
+  ],
+  "observedFindingIds": [],
+  "verifiedFiles": [],
+  "recordedAt": "2026-09-08T16:37:27.231Z"
+}

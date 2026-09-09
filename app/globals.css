@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-night-950 text-slate-100;
+}
+
+.card {
+  @apply bg-night-800 border border-line rounded-2xl;
+}
+
+.pill {
+  @apply inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full border border-line-strong text-slate-400;
+}
+.pill-warn { @apply text-owl-amber border-owl-amber/40 bg-owl-amber/10; }
+.pill-ok { @apply text-owl-teal border-owl-teal/40 bg-owl-teal/10; }
+.pill-bad { @apply text-owl-red border-owl-red/40 bg-owl-red/10; }
+
+.btn {
+  @apply cursor-pointer border border-line-strong bg-night-900 text-slate-100 px-4 py-2 rounded-lg text-sm transition-colors;
+}
+.btn:hover:not(:disabled) { @apply border-owl-amber text-owl-amber; }
+.btn:disabled { @apply opacity-40 cursor-not-allowed; }
+.btn-primary { @apply bg-owl-amber border-owl-amber text-night-950 font-semibold; }
+.btn-primary:hover:not(:disabled) { @apply brightness-110 text-night-950; }
+.btn-ghost { @apply bg-transparent; }
+
+.input {
+  @apply bg-night-900 border border-line-strong rounded-lg px-4 py-3 text-slate-100 outline-none w-full;
+}
+.input:focus { @apply border-owl-amber; }
