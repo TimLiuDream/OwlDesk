@@ -17,3 +17,5 @@ next-env.d.ts
 .DS_Store
 .mimosa/
 logs/
+server.log
+server.err.log
