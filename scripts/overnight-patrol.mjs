@@ -32,9 +32,14 @@ function log(line) {
 }
 
 async function post(pathname, body) {
+  const headers = { "Content-Type": "application/json" };
+  // Server deployments require CRON_SECRET (see docs/DEPLOY.md); the patrol
+  // endpoint validates Bearer auth when it is set.
+  const secret = process.env.CRON_SECRET;
+  if (secret) headers["Authorization"] = "Bearer " + secret;
   const res = await fetch(BASE + pathname, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(body ?? {}),
   });
   const text = await res.text();
