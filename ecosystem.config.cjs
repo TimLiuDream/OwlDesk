@@ -12,7 +12,9 @@ module.exports = {
       name: "owldesk-web",
       cwd: __dirname,
       script: "node_modules/next/dist/bin/next",
-      args: "start -H 127.0.0.1 -p 3000",
+      // 3119: agreed host port (3000/3001 etc. are taken by other services);
+      // loopback-only — public ingress is Nginx 443 (docs/DEPLOY.md Step 3)
+      args: "start -H 127.0.0.1 -p 3119",
       instances: 1,
       exec_mode: "fork",
       autorestart: true,
@@ -32,7 +34,7 @@ module.exports = {
       instances: 1,
       exec_mode: "fork",
       autorestart: true,
-      env: { OWLDESK_BASE_URL: "http://127.0.0.1:3000" },
+      env: { OWLDESK_BASE_URL: "http://127.0.0.1:3119" },
       out_file: "logs/patrol.out.log",
       error_file: "logs/patrol.err.log",
       merge_logs: true,

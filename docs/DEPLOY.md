@@ -1,7 +1,7 @@
 # OwlDesk 服务器部署文档（香港 VPS 版）
 
 > 目标：部署到自有香港服务器，绑域名 + HTTPS，15 分钟巡检 7×24 常驻。
-> 本文档替代原 Vercel 方案。架构回顾：Next.js 全栈单体（前后端同进程），JSON 文件存储，单端口 3000。
+> 本文档替代原 Vercel 方案。架构回顾：Next.js 全栈单体（前后端同进程），JSON 文件存储，单端口（本机约定 **3119**，仅回环，公网走 Nginx 443）。
 >
 > **为什么服务器方案更简单**：Vercel 方案的两个最重步骤——存储迁移 Upstash（serverless 文件系统只读）和 CF Worker 外部定时器（Hobby cron 降级为每天一次）——在常驻进程 + 持久磁盘上**整个消失**。昨晚本地整夜试跑（85 次调度零失败）就是生产形态的直接验证。
 
@@ -130,50 +130,74 @@ pm2 startup         # 按提示执行输出的命令 → 开机自启
 pm2 logs --lines 20 # 看启动日志
 ```
 
-- `owldesk-web`：`next start -H 127.0.0.1 -p 3000`（只绑回环，公网入口交给 Nginx/CF，见 Step 3）
-- `owldesk-patrol`：`scripts/overnight-patrol.mjs`，每 15 分钟打 `127.0.0.1:3000/api/cron/patrol`（接口自带美股时段门禁），04:20/07:25 生成晨报——与本地夜跑完全一致。driver 通过 `--env-file=.env` 读取 `CRON_SECRET` 并自动携带 `Authorization: Bearer`（服务器必设 secret，本地留空则跳过鉴权，两边兼容）
+- `owldesk-web`：`next start -H 127.0.0.1 -p 3119`（**3119 是约定端口**，服务器上 3000/3001 等已被其他服务占用；只绑回环，公网入口交给 Nginx，见 Step 3）
+- `owldesk-patrol`：`scripts/overnight-patrol.mjs`，每 15 分钟打 `127.0.0.1:3119/api/cron/patrol`（接口自带美股时段门禁），04:20/07:25 生成晨报——与本地夜跑完全一致。driver 通过 `--env-file=.env` 读取 `CRON_SECRET` 并自动携带 `Authorization: Bearer`（服务器必设 secret，本地留空则跳过鉴权，两边兼容）
 - **本地那台机器的 driver 记得停掉**（任务管理器结束 node 进程），避免双份事件写各自的库
 
 ---
 
-## Step 3：域名 + HTTPS + 防火墙
+## Step 3：域名 + HTTPS（复用现有 CF Origin 证书体系）
 
-### 方案 A（推荐）：Cloudflare 橙云代理
+> 服务器现状：`square.timliu.xyz` 已用「CF 橙云代理 + Nginx 443 + CF Origin CA 证书」模式在跑。OwlDesk 照搬同一模式，加一个子域和一个 server block 即可，**不需要 certbot、不需要新证书体系**。
+>
+> ⚠️ CF Origin CA 证书**只在橙云（Proxied）下有效**——灰云直连时浏览器会拒绝它（非公共信任链）。新子域的 DNS 记录必须开橙云。
 
-有域名且 DNS 在 CF 的话，这是最省事 + 对国内评委最友好的方案：
+### 3.1 确认证书覆盖范围
 
-1. CF → DNS → 加 A 记录：`owldesk.你的域名` → 服务器 IP，**Proxy status: Proxied（橙云）**
-2. CF → SSL/TLS → 模式选 **Full**（源站用自签证书）或 **Full (strict)**（源站用 Let's Encrypt，见方案 B 的 certbot 步骤）
-3. 服务器 Nginx 反代（下面配置），80/443 对 CF 开放
-4. 收益：免费 HTTPS、隐藏源站 IP、CF 全球加速（大陆可达性远好于 *.vercel.app）、基础 DDoS 防护
+```bash
+openssl x509 -in /etc/ssl/cloudflare/origin.pem -noout -text | grep -A1 "Subject Alternative Name"
+```
 
-### 方案 B：直连 A 记录 + Let's Encrypt
+- 输出含 `*.timliu.xyz` 或 `owldesk.timliu.xyz` → 直接复用这对 pem/key
+- 只含 `square.timliu.xyz` → 去 CF 控制台再签一张 Origin Cert（SSL/TLS → Origin Server → Create Certificate，主机名填 `owldesk.timliu.xyz` 或 `*.timliu.xyz`，15 年有效期），存为 `/etc/ssl/cloudflare/owldesk.pem` / `owldesk.key`
 
-1. DNS A 记录指向服务器 IP（灰云/仅 DNS）
-2. 服务器：`sudo apt install nginx certbot python3-certbot-nginx`
-3. Nginx 配置（两方案通用）：
+### 3.2 Cloudflare DNS
+
+CF → 你的域 → DNS → Add record：
+
+- Type: `A` · Name: `owldesk` · Target: 服务器 IP · **Proxy status: Proxied（橙云）** ← 必须
+- SSL/TLS 加密模式保持与 square 站一致（用了 Origin CA 证书则应为 **Full (strict)**）
+
+### 3.3 Nginx server block
+
+新建 `/etc/nginx/sites-available/owldesk.conf`（软链到 sites-enabled），与 square 站同构，仅端口/域名不同：
 
 ```nginx
 server {
     listen 80;
-    server_name owldesk.你的域名;
+    server_name owldesk.timliu.xyz;
+    return 301 https://$host$request_uri;
+}
 
-    # SSE（聊天流式）必需：关缓冲、长读超时
+server {
+    listen 443 ssl http2;
+    server_name owldesk.timliu.xyz;
+
+    ssl_certificate     /etc/ssl/cloudflare/origin.pem;   # 或 owldesk.pem（见 3.1）
+    ssl_certificate_key /etc/ssl/cloudflare/origin.key;   # 或 owldesk.key
+    ssl_protocols       TLSv1.2 TLSv1.3;
+
+    client_max_body_size 20m;
+
+    # SSE（聊天流式）专用：必须关缓冲，否则整段卡顿
     location /api/chat {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://127.0.0.1:3119;
         proxy_http_version 1.1;
         proxy_set_header Connection "";
         proxy_buffering off;
         proxy_cache off;
         proxy_read_timeout 300s;
         proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
     location / {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://127.0.0.1:3119;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 120s;   # 巡检实测 ~52s，留余量
@@ -181,20 +205,20 @@ server {
 }
 ```
 
-4. `sudo certbot --nginx -d owldesk.你的域名` → 自动签证书 + 改配置 + 续期
-
-### 方案 C（不推荐提交用）：无域名裸 IP
-
-`http://IP:3000` 直接可用（pm2 里把 `-H 127.0.0.1` 去掉改 `-H 0.0.0.0`），但提交链接没有 HTTPS，观感和浏览器信任都差。仅应急。
-
-### 防火墙
-
 ```bash
-sudo ufw allow OpenSSH
-sudo ufw allow 80,443/tcp
-sudo ufw enable
-# 3000 不对外开放（web 只绑回环 + Nginx 反代）
+sudo ln -s /etc/nginx/sites-available/owldesk.conf /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
 ```
+
+### 3.4 防火墙
+
+80/443 已因 square 站开放，无需改动。**3119 不要对外开放**（web 只绑 127.0.0.1，Nginx 反代）；确认 ufw 没有放行 3119 即可。
+
+### 3.5 CF 橙云的附带注意项
+
+- **WebSocket/长连接**：CF 代理默认支持 SSE，无需额外配置
+- **100 秒限制**：CF 橙云对单个请求有 100s 上限——巡检 ~52s、聊天单轮 ~60s 都在限内；`proxy_read_timeout 300s` 只是 Nginx 侧余量，真正封顶是 CF 的 100s（当前所有接口都够用，记录在案）
+- 国内访问橙云节点通常可达（比 *.vercel.app 稳），评委侧风险低
 
 ---
 
@@ -202,10 +226,10 @@ sudo ufw enable
 
 全部在正式域名上执行：
 
-- [ ] **首页晨报**：`https://域名/` 打开，晨报卡片渲染（首次懒生成等几秒）；若做了数据种子，应看到昨夜真实事件
+- [ ] **首页晨报**：`https://owldesk.timliu.xyz/` 打开，晨报卡片渲染（首次懒生成等几秒）；若做了数据种子，应看到昨夜真实事件
 - [ ] **巡检鉴权**：
   ```bash
-  curl -X POST https://域名/api/cron/patrol -H "Authorization: Bearer <CRON_SECRET>" -H "Content-Type: application/json" -d '{"force":true}'
+  curl -X POST https://owldesk.timliu.xyz/api/cron/patrol -H "Authorization: Bearer <CRON_SECRET>" -H "Content-Type: application/json" -d '{"force":true}'
   # 盘中返回 eventsAdded；盘外返回 skipped。不带 token → 必须 401
   ```
 - [ ] **聊天 SSE**：问「RTSLAUSDT 现在多少钱」，流式输出 + 工具 chips + markdown 渲染正常（Nginx 的 `proxy_buffering off` 生效则无整段卡顿）
@@ -249,6 +273,6 @@ crontab -e
 
 ## 提交物对照（黑客松表单）
 
-- 部署链接：`https://owldesk.你的域名`（不要裸 IP / 不要 http）
+- 部署链接：`https://owldesk.timliu.xyz`（不要裸 IP / 不要 http）
 - Agent Hub 使用证明：线上晨报页（行情来自 market 模块）+ 签字后真实 orderId 截图 + 服务器 `pm2 logs` 巡检记录
 - 录屏脚本：打开晨报 → 追问 → 拟单 → 签字 → 模拟盘订单确认，≤90s
