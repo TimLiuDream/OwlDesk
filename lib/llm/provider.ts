@@ -116,10 +116,13 @@ export async function chatCompletion(
     }
 
     const detail = (await res.text().catch(() => "")).slice(0, 300);
-    const retryable = res.status >= 500 || res.status === 429;
+    // The cavoti proxy reports its breaker state in the BODY with varying
+    // status codes — treat those as retryable regardless of the code.
+    const proxyUnhealthy = /temporarily_unhealthy|marketplace_only_provider/i.test(detail);
+    const retryable = res.status >= 500 || res.status === 429 || proxyUnhealthy;
     lastError = new LlmUnavailableError(`LLM HTTP ${res.status}: ${detail}`);
     if (retryable && attempt < MAX_ATTEMPTS) {
-      await sleep(800);
+      await sleep(1500);
       continue;
     }
     throw lastError;

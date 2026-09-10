@@ -11,9 +11,12 @@
   },
   "dependencies": {
     "@bitget-ai/bitget-agent-sdk": "^3.3.0",
+    "@tailwindcss/typography": "^0.5.20",
     "next": "14.2.35",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",

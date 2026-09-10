@@ -7,7 +7,7 @@
 
 import { read, update, uid, type Brief, type BriefTicker, type OvernightEvent } from "@/lib/db";
 import { getSnapshots } from "@/lib/agenthub/market";
-import { chatCompletion, LlmUnavailableError } from "@/lib/llm/provider";
+import { chatCompletion } from "@/lib/llm/provider";
 import { briefSystemPrompt } from "@/lib/llm/prompts";
 import { etDate } from "./patrol";
 
@@ -97,16 +97,18 @@ export async function generateBrief(force = false): Promise<{ brief: Brief; crea
       throw new Error("brief JSON parse failed");
     }
   } catch (e) {
-    if (!(e instanceof LlmUnavailableError)) {
-      status = "partial";
-    }
+    // ANY generation failure (LLM down, proxy breaker, parse error) degrades
+    // to the template AND must be labeled partial — never "ok". A degraded
+    // brief that claims to be normal is the same class of bug as fake data
+    // (review A1): degradation must be explicit.
+    status = "partial";
+    console.warn("[brief] LLM generation failed, template fallback:", e instanceof Error ? e.message : e);
     summary = templateBrief(date, events, watchlist.map((w) => ({
       symbol: w.symbol,
       name: w.name,
       changePct: snapBySymbol.get(w.symbol)?.changePct ?? null,
       price: snapBySymbol.get(w.symbol)?.price ?? null,
     })));
-    if (!(e instanceof LlmUnavailableError)) status = "partial";
   }
 
   const brief: Brief = {

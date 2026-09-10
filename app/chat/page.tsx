@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import Markdown from "@/components/Markdown";
 
 interface Msg {
   role: "user" | "assistant";
@@ -168,7 +169,15 @@ function ChatInner() {
                 }
               >
                 {m.role === "assistant" && <div className="mb-1 text-[11px] tracking-wide text-slate-500">🦉 OwlDesk</div>}
-                <div className="whitespace-pre-wrap leading-relaxed">{m.text || (busy && i === messages.length - 1 ? "…" : "")}</div>
+                {m.role === "assistant" ? (
+                  m.text ? (
+                    <Markdown text={m.text} />
+                  ) : (
+                    busy && i === messages.length - 1 ? <span className="text-slate-500">…</span> : null
+                  )
+                ) : (
+                  <div className="whitespace-pre-wrap leading-relaxed">{m.text}</div>
+                )}
                 {m.tools && m.tools.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {m.tools.map((t, j) => (

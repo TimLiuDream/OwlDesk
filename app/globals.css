@@ -34,3 +34,29 @@ body {
   @apply bg-night-900 border border-line-strong rounded-lg px-4 py-3 text-slate-100 outline-none w-full;
 }
 .input:focus { @apply border-owl-amber; }
+
+/* ---- chat markdown (compact prose for bubbles) ---- */
+.owl-prose {
+  @apply text-sm leading-relaxed;
+}
+.owl-prose p { @apply my-1.5; }
+.owl-prose p:first-child { @apply mt-0; }
+.owl-prose p:last-child { @apply mb-0; }
+.owl-prose ul, .owl-prose ol { @apply my-1.5 pl-5 space-y-1; }
+.owl-prose ul { list-style: disc; }
+.owl-prose ol { list-style: decimal; }
+.owl-prose li::marker { @apply text-slate-500; }
+.owl-prose strong { @apply text-white font-semibold; }
+.owl-prose h1, .owl-prose h2, .owl-prose h3 {
+  @apply text-base font-bold text-white mt-3 mb-1.5;
+}
+.owl-prose pre {
+  @apply bg-night-950 border border-line rounded-lg p-3 my-2 overflow-x-auto text-xs;
+}
+.owl-prose pre code { @apply bg-transparent p-0 text-slate-300; }
+.owl-prose blockquote {
+  @apply border-l-2 border-owl-amber/50 pl-3 my-2 text-slate-400 italic;
+}
+.owl-prose table { @apply my-2 text-xs border-collapse; }
+.owl-prose th, .owl-prose td { @apply border border-line px-2 py-1 text-left; }
+.owl-prose hr { @apply border-line my-3; }
