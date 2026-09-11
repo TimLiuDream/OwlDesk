@@ -48,6 +48,9 @@ export interface Brief {
   status: "ok" | "partial";
   summary_json: {
     headline: string;
+    /** Session overview paragraph (2-3 sentences). Optional: briefs generated
+     * before this field existed only have headline. */
+    summary?: string;
     tickers: BriefTicker[];
   };
 }

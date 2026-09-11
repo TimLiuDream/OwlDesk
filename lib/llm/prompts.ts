@@ -29,11 +29,13 @@ export function briefSystemPrompt(): string {
 - "focus" 给出今日关注点（事件、价位、日历）
 - 严禁编造事件列表之外的事实；每段应可追溯到输入事件
 - headline 是一句话总结整夜（不超过 40 字）
+- summary 是整夜的总览段落（2-3 句，100-180 字）：先给全场基调（涨跌家数/整体方向），再点出最值得注意的 1-2 个标的及其具体数字，最后一句给今日视角（驱动是否明确、该盯什么）。只使用输入事件中的数据，事件不足时如实说"消息面平静，波动以技术性为主"这类诚实表述
 - 中文输出
 
 输出 JSON：
 {
   "headline": "string",
+  "summary": "string",
   "tickers": [
     { "symbol": "TSLAUSDT", "name": "TSLA", "what": "…", "why": "…", "view": "…", "focus": "…" }
   ]

@@ -98,7 +98,13 @@ export default function BriefPage() {
             {data.stale && <span className="pill pill-warn ml-2 align-middle">最近一份（新时段未开盘）</span>}
             {brief.status === "partial" && <span className="pill pill-warn ml-2 align-middle">模板降级</span>}
           </h1>
-          <p className="mt-1 text-sm text-slate-500">{brief.summary_json.headline}</p>
+          <p className="mt-1 text-sm font-medium text-slate-300">{brief.summary_json.headline}</p>
+          {brief.summary_json.summary && (
+            <div className="mt-3 rounded-xl border-l-2 border-owl-amber bg-night-900 px-5 py-3.5">
+              <div className="mb-1 text-[11px] tracking-widest text-slate-500">隔夜总览</div>
+              <p className="text-[15px] leading-relaxed text-slate-200">{brief.summary_json.summary}</p>
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
           <button className="btn" onClick={patrolNow} disabled={regenerating}>

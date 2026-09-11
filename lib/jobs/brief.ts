@@ -36,8 +36,22 @@ function templateBrief(date: string, events: OvernightEvent[], tickers: Array<{ 
     };
   });
   const movedCount = moved.length;
+  // honest 2-sentence overview computed from the events themselves
+  const biggest = moved
+    .filter((e) => typeof e.change_pct === "number")
+    .sort((a, b) => Math.abs(b.change_pct as number) - Math.abs(a.change_pct as number))[0];
+  const upCount = moved.filter((e) => (e.change_pct ?? 0) > 0).length;
+  const summary =
+    movedCount === 0
+      ? `本时段巡检未记录到显著异动（${tickers.length} 个标的），市场整体平静。模板简报 — 配置 LLM 后将包含 AI 总览。`
+      : `本时段共记录 ${movedCount} 条异动（涨 ${upCount} / 跌 ${movedCount - upCount}）` +
+        (biggest
+          ? `，其中幅度最大的是 ${biggest.symbol.replace(/USDT$/, "")} 的 ${biggest.title.replace(/^.*异动\s*/, "")}。`
+          : "。") +
+        `消息面事件${events.some((e) => e.type === "news") ? "已有记录" : "暂缺"}，模板简报 — 配置 LLM 后将包含 AI 归因总览。`;
   return {
     headline: `${date} 隔夜：${movedCount} 条异动事件（模板简报 — LLM 未启用）`,
+    summary,
     tickers: t,
   };
 }
@@ -83,6 +97,15 @@ export async function generateBrief(force = false): Promise<{ brief: Brief; crea
     if (jsonStart >= 0 && jsonEnd > jsonStart) {
       const parsed = JSON.parse(raw.slice(jsonStart, jsonEnd + 1)) as Brief["summary_json"];
       if (parsed && Array.isArray(parsed.tickers) && typeof parsed.headline === "string") {
+        // LLM may omit the summary paragraph — backfill with the computed one
+        if (!parsed.summary || parsed.summary.length < 20) {
+          parsed.summary = templateBrief(date, events, watchlist.map((w) => ({
+            symbol: w.symbol,
+            name: w.name,
+            changePct: snapBySymbol.get(w.symbol)?.changePct ?? null,
+            price: snapBySymbol.get(w.symbol)?.price ?? null,
+          }))).summary;
+        }
         summary = parsed;
       } else {
         summary = templateBrief(date, events, watchlist.map((w) => ({
