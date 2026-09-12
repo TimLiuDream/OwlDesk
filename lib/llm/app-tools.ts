@@ -20,18 +20,22 @@ export interface DraftOrderAction {
   qty: number;
 }
 
-export async function createOrderDraft(rawText: string): Promise<{ order: OrderDraft } | { error: string }> {
+export async function createOrderDraft(rawText: string, defaultQty = 10): Promise<{ order: OrderDraft } | { error: string }> {
   const plan = await parseOrderPlan(rawText);
   if (!plan.symbol) {
     return { error: "无法识别标的代码，请明确写出（如 TSLA 或 RTSLAUSDT）" };
   }
+
+  // 数量缺失 → 默认股数 + warn 标注（与拟单台一致），而不是生成被阻断的草稿
+  const usedDefault = plan.qty === null;
+  const qty = usedDefault ? defaultQty : plan.qty;
 
   const [snap] = await getSnapshots([plan.symbol]);
   const account = await getAccountContext();
   const risk = riskCheck({
     side: plan.side,
     symbol: plan.symbol,
-    qty: plan.qty,
+    qty,
     order_type: plan.order_type,
     limit_price: plan.limit_price,
     trigger_price: plan.trigger_price,
@@ -40,6 +44,13 @@ export async function createOrderDraft(rawText: string): Promise<{ order: OrderD
     currentPrice: snap?.price ?? null,
     marketDataLive: snap?.source === "agenthub",
   });
+  if (usedDefault) {
+    risk.warnings = risk.warnings.filter((w) => w.level !== "info");
+    risk.warnings.unshift({
+      text: `未在指令中指定数量，已使用默认 ${qty} 股（可修改后重新签字）`,
+      level: "warn",
+    });
+  }
 
   const draft: OrderDraft = {
     id: uid("d"),
@@ -48,7 +59,7 @@ export async function createOrderDraft(rawText: string): Promise<{ order: OrderD
     symbol: plan.symbol,
     side: plan.side,
     order_type: plan.order_type,
-    qty: plan.qty ?? 0,
+    qty,
     limit_price: plan.limit_price ?? undefined,
     trigger_cond: plan.trigger_cond ?? undefined,
     trigger_price: plan.trigger_price ?? undefined,

@@ -16,6 +16,7 @@ export default function OrdersPage() {
 function OrdersInner() {
   const [orders, setOrders] = useState<OrderDraft[]>([]);
   const [input, setInput] = useState("");
+  const [defaultQty, setDefaultQty] = useState("10");
   const [busy, setBusy] = useState(false);
   const searchParams = useSearchParams();
 
@@ -38,10 +39,11 @@ function OrdersInner() {
     setBusy(true);
     setInput("");
     try {
+      const dq = Number(defaultQty);
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, defaultQty: Number.isFinite(dq) && dq > 0 ? dq : undefined }),
       });
       const data = (await res.json()) as { order?: OrderDraft; error?: { message?: string } };
       if (!res.ok) {
@@ -79,11 +81,21 @@ function OrdersInner() {
       <div className="mb-5 flex gap-2.5">
         <input
           className="input"
-          placeholder="例：TSLA 跌破 220 帮我接半仓　/　NVDA 市价买 10 股"
+          placeholder="例：TSLA 跌破 350 帮我接半仓　/　NVDA 市价买 10 股（不写数量则用默认股数）"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && draft()}
         />
+        <label className="flex shrink-0 items-center gap-1.5 rounded-lg border border-line-strong bg-night-900 px-3 text-xs text-slate-400">
+          默认股数
+          <input
+            className="w-12 bg-transparent py-2.5 text-sm text-slate-100 outline-none"
+            type="number"
+            min="1"
+            value={defaultQty}
+            onChange={(e) => setDefaultQty(e.target.value)}
+          />
+        </label>
         <button className="btn btn-primary shrink-0" onClick={() => draft()} disabled={busy}>
           {busy ? "起草中…" : "生成订单计划"}
         </button>
