@@ -139,7 +139,12 @@ function ChatInner() {
 
   useEffect(() => {
     const q = searchParams.get("q");
-    if (q) send(q);
+    // ?q= is a one-shot channel (brief-page "追问解读") — strip it before
+    // sending so a refresh can't re-send the question.
+    if (q) {
+      window.history.replaceState(null, "", "/chat");
+      send(q);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 

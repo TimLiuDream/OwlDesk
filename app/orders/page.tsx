@@ -58,9 +58,12 @@ function OrdersInner() {
   const consumedRef = useRef(false);
   useEffect(() => {
     const q = searchParams.get("q");
-    // C6: "就此拟单" from the brief jumps straight into a generated plan card
+    // C6: "就此拟单" from the brief jumps straight into a generated plan card.
+    // The URL param is a ONE-SHOT action channel: strip it the moment it is
+    // consumed, otherwise a refresh remounts the page and drafts a duplicate.
     if (q && !consumedRef.current) {
       consumedRef.current = true;
+      window.history.replaceState(null, "", "/orders");
       draft(q);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
