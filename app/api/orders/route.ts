@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   // 数量缺失时用默认股数生成可签字的计划卡，而不是硬阻断——
   // 默认值在卡片风险标注里明示，且随时可内联修改
   const usedDefault = plan.qty === null;
-  const qty = usedDefault ? defaultQty : plan.qty;
+  const qty = plan.qty ?? defaultQty;
 
   const [snap] = await getSnapshots([plan.symbol]);
   const account = await getAccountContext();

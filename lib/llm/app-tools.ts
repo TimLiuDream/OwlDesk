@@ -28,7 +28,7 @@ export async function createOrderDraft(rawText: string, defaultQty = 10): Promis
 
   // 数量缺失 → 默认股数 + warn 标注（与拟单台一致），而不是生成被阻断的草稿
   const usedDefault = plan.qty === null;
-  const qty = usedDefault ? defaultQty : plan.qty;
+  const qty = plan.qty ?? defaultQty;
 
   const [snap] = await getSnapshots([plan.symbol]);
   const account = await getAccountContext();
