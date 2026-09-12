@@ -96,7 +96,7 @@ function OrdersInner() {
           </div>
         )}
         {active.map((o) => (
-          <OrderPlanCard key={o.id} order={o} onSigned={replaceOrder} onCanceled={replaceOrder} />
+          <OrderPlanCard key={o.id} order={o} onSigned={replaceOrder} onCanceled={replaceOrder} onUpdated={replaceOrder} />
         ))}
       </div>
 

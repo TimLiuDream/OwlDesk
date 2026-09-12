@@ -32,13 +32,16 @@ export default function OrderPlanCard({
   order,
   onSigned,
   onCanceled,
+  onUpdated,
 }: {
   order: OrderDraft;
   onSigned: (o: OrderDraft) => void;
   onCanceled: (o: OrderDraft) => void;
+  onUpdated?: (o: OrderDraft) => void;
 }) {
   const [signing, setSigning] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [qtyInput, setQtyInput] = useState("");
 
   const priceLabel =
     order.order_type === "market"
@@ -85,6 +88,24 @@ export default function OrderPlanCard({
     }
   };
 
+  const amendQty = async () => {
+    const qty = Number(qtyInput);
+    if (!Number.isFinite(qty) || qty <= 0) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/orders/${order.id}/update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ qty }),
+      });
+      const data = (await res.json()) as { order?: OrderDraft };
+      if (res.ok && data.order) onUpdated?.(data.order);
+      setQtyInput("");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className={`card overflow-hidden ${order.status !== "draft" ? "border-owl-teal/40" : ""}`}>
       <div className="flex flex-wrap items-center gap-3 border-b border-line px-6 py-4">
@@ -122,6 +143,25 @@ export default function OrderPlanCard({
           </ul>
         </div>
       </div>
+
+      {order.status === "draft" && order.qty <= 0 && (
+        <div className="flex flex-wrap items-center gap-2.5 border-t border-dashed border-owl-amber/40 bg-owl-amber/[0.04] px-6 py-3">
+          <span className="text-[13px] text-owl-amber">✏️ 补全数量（股数）：</span>
+          <input
+            className="input !w-28 !px-3 !py-1.5 text-sm"
+            type="number"
+            min="0"
+            step="any"
+            placeholder="如 10"
+            value={qtyInput}
+            onChange={(e) => setQtyInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && amendQty()}
+          />
+          <button className="btn !px-3 !py-1.5 text-sm" disabled={busy || !qtyInput} onClick={amendQty}>
+            更新并重检风险
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2.5 border-t border-line bg-white/[0.01] px-6 py-3.5">
         <span className="mr-auto max-w-[45%] truncate text-xs italic text-slate-500">“{order.raw_text}”</span>

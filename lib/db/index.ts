@@ -100,7 +100,7 @@ export interface ChatMessage {
 export interface AuditEntry {
   id: string;
   ts: string;
-  action: "sign" | "submit" | "cancel" | "reject";
+  action: "sign" | "submit" | "cancel" | "reject" | "amend";
   entity_id: string;
   actor: string;
   detail: string;
